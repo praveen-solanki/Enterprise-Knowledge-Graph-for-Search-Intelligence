@@ -1,0 +1,100 @@
+services:
+
+  neo4j:
+    # Enterprise required: bulk runs call CREATE DATABASE per run (Community rejects it).
+    image: neo4j:5.26.0-enterprise
+    container_name: ai-graph-ingestion-neo4j
+    restart: unless-stopped
+    ports:
+      - "7474:7474"   # HTTP Browser + Query API (open SG TCP 7474 for outside access)
+      - "7687:7687"   # Bolt (open SG TCP 7687 for outside access)
+    environment:
+      NEO4J_AUTH: neo4j/${EC2_NEO4J_PASSWORD:?EC2_NEO4J_PASSWORD must be set}
+      NEO4J_ACCEPT_LICENSE_AGREEMENT: "yes"
+      NEO4J_PLUGINS: '["apoc"]'
+      NEO4J_dbms_security_procedures_unrestricted: apoc.*
+      # Cap heap + pagecache so Neo4j does not auto-size into pipeline RAM.
+      NEO4J_server_memory_heap_initial__size: 512m
+      NEO4J_server_memory_heap_max__size: 1g
+      NEO4J_server_memory_pagecache_size: 1g
+    volumes:
+      - ai_graph_ingestion_neo4j_data:/data
+      - ai_graph_ingestion_neo4j_logs:/logs
+      - ai_graph_ingestion_neo4j_plugins:/plugins
+    # ~1g heap + 1g pagecache + JVM/native overhead
+    mem_limit: 4g
+    mem_reservation: 2g
+    healthcheck:
+      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "${EC2_NEO4J_PASSWORD:?EC2_NEO4J_PASSWORD must be set}", "RETURN 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  mongodb:
+    image: mongo:7.0
+    container_name: ai-graph-ingestion-mongodb
+    restart: unless-stopped
+    # Bound on all interfaces so SG TCP 27017 can reach it from outside EC2.
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?MONGO_ROOT_PASSWORD must be set}
+      MONGO_INITDB_DATABASE: ${EC2_MONGO_DB:-graph_ingestion_checkpoints_dev}
+    # Default WiredTiger cache is ~50% of host RAM — fatal next to Neo4j + pipeline.
+    # 1.5 GiB cache + process overhead stays under mem_limit.
+    command:
+      - mongod
+      - --bind_ip_all
+      - --wiredTigerCacheSizeGB
+      - "1.5"
+    volumes:
+      - ai_graph_ingestion_mongodb_data:/data/db
+    mem_limit: 3g
+    mem_reservation: 2g
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mongosh",
+          "--quiet",
+          "-u", "root",
+          "-p", "${MONGO_ROOT_PASSWORD:?MONGO_ROOT_PASSWORD must be set}",
+          "--authenticationDatabase", "admin",
+          "--eval", "db.adminCommand('ping').ok",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: ai-graph-ingestion-qdrant
+    restart: unless-stopped
+    # Bound on all interfaces so SG TCP 6333/6334 can reach it from outside EC2.
+    ports:
+      - "6333:6333"   # REST API
+      - "6334:6334"   # gRPC
+    environment:
+      QDRANT__SERVICE__API_KEY: ${EC2_QDRANT_API_KEY:?EC2_QDRANT_API_KEY must be set}
+    volumes:
+      - ai_graph_ingestion_qdrant_data:/qdrant/storage
+    # Enough for ~170k × 1536-d vectors + headroom; leave RAM for Neo4j/Mongo/pipeline.
+    mem_limit: 2g
+    mem_reservation: 1g
+    healthcheck:
+      # Qdrant image bash has no /dev/tcp; /proc/net/tcp port 6333 == 0x18BD.
+      test: ["CMD-SHELL", "grep -q ':18BD ' /proc/net/tcp /proc/net/tcp6"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  ai_graph_ingestion_neo4j_data:
+  ai_graph_ingestion_neo4j_logs:
+  ai_graph_ingestion_neo4j_plugins:
+  ai_graph_ingestion_mongodb_data:
+  ai_graph_ingestion_qdrant_data:

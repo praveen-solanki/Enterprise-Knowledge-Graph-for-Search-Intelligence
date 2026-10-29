@@ -1,0 +1,14 @@
+# Never bake credentials or local state into the image — every value in
+# config/settings.py comes from real environment variables at container run
+# time (Vault-injected in production, or --env-file for local testing).
+.env
+
+.venv/
+.git/
+.gitignore
+logs/
+__pycache__/
+*.pyc
+.DS_Store
+tests/
+README.md

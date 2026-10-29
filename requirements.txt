@@ -1,0 +1,22 @@
+pydantic==2.13.4
+pydantic-settings==2.14.2
+# Makes requests/hvac/urllib3 verify TLS against the OS-native trust store
+# instead of the certifi bundle -- see connectors/vault_manager.py's injection.
+truststore==0.10.4
+openai==2.44.0
+numpy==2.4.6
+pymongo==4.17.0
+requests==2.34.2
+httpx==0.28.1
+faiss-cpu==1.14.3
+boto3==1.43.47
+confluent-kafka==2.15.0
+qdrant-client==1.18.0
+hvac==2.3.0
+
+# Two PRIVATE git packages, installed in the deploy image only — not declared
+# here (can't be locked without private registry access; imports are guarded
+# with a fallback in code, see connectors/vault_manager.py and the logger
+# integration). <org> is the Dockerfile's PRIVATE_GIT_ORG build arg:
+#   python-common-logger        @ git+https://github.com/<org>/python-common-logger.git
+#   ai-infra-python-sdk-vault    @ git+https://github.com/<org>/ai-platform-infra-sdk.git#subdirectory=packages/ai_infra_python_sdk_vault

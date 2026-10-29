@@ -1,0 +1,11 @@
+.env
+.env.bak
+vault-creds.sh
+*creds*.sh
+.venv/
+logs/
+__pycache__/
+*.pyc
+.DS_Store
+.vscode/
+pyrightconfig.json
