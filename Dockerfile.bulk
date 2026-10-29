@@ -38,6 +38,8 @@ USER appuser
 
 ENTRYPOINT ["python", "-m", "core.entrypoint"]
 
-# Default caps a run to 2 docs, no Neo4j write, so a bare `docker run` can't
-# trigger a full run by accident. Explicit args at runtime replace this entirely.
+# Default caps a run to 2 docs. It still writes to Neo4j — there is no
+# compute-only mode. A bare `docker run` also fails until --connector,
+# --index, and --tenant-id are supplied (or the BULK_* env vars). Explicit
+# args at runtime replace this default entirely.
 CMD ["--limit", "2"]

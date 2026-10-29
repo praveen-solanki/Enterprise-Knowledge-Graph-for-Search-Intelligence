@@ -27,16 +27,18 @@ Every run writes its result to Neo4j — there is no compute-only mode (PR-41
 review point 6). Each run mints its own isolated stores from (tenant, connector).
 
 Usage (--connector, --index and --tenant-id are all required):
-    python -m core.entrypoint --connector zeus --index some-index --tenant-id acme-corp
-    python -m core.entrypoint --connector zeus --index some-index --tenant-id acme-corp \
+    python -m core.entrypoint --connector wikipedia --index "graph database" --tenant-id demo
+    python -m core.entrypoint --connector arxiv --index "graph database" --tenant-id demo \
         --limit 5  # smoke test on 5 documents
-    python -m core.entrypoint --connector zeus --retry-failed some-index:acme-corp:zeus:em8g   # re-drive failed docs;
-                                                                                    # copy run_id from logs
+    python -m core.entrypoint --connector wikipedia \
+        --retry-failed "graph database:demo:wikipedia:em8g"   # re-drive failed docs;
+                                                              # copy run_id from logs
 
     # Equivalent, driven entirely by env vars (as ai-jobs-manager would do):
-    BULK_CONNECTOR=zeus BULK_INDEX=some-index BULK_LIMIT=5 BULK_TENANT_ID=acme-corp \
+    BULK_CONNECTOR=wikipedia BULK_INDEX="graph database" BULK_LIMIT=5 BULK_TENANT_ID=demo \
         python -m core.entrypoint
-    BULK_CONNECTOR=zeus BULK_RETRY_FAILED=some-index:acme-corp:zeus:em8g python -m core.entrypoint
+    BULK_CONNECTOR=wikipedia BULK_RETRY_FAILED="graph database:demo:wikipedia:em8g" \
+        python -m core.entrypoint
 
 --connector/BULK_CONNECTOR is the one name for the source: it both selects which
 source to read AND labels this run's isolated stores (it IS the run's

@@ -245,12 +245,26 @@ def test_fatal_error_is_re_raised_not_swallowed():
 @_azure_backend
 def test_gleaning_failure_falls_back_to_base_result():
     """Gleaning is best-effort -- a broken gleaning call must never lose an
-    otherwise-good base extraction."""
+    otherwise-good base extraction.
+
+    The failure is transient, so the shared retry loop backs off and, once it
+    gives up, writes a call-failure row. Both of those are real I/O (a sleep,
+    then Mongo). This test stubs them the same way the other failure tests do,
+    or a full-suite run blocks on the database."""
     service = _service()
     base_result = ChunkExtractionResult(entities=[ExtractedEntity(name="Globex", type="ORGANIZATION")])
-    with patch("services.extraction_service.llm_client.complete",
-              new=AsyncMock(side_effect=[base_result, RuntimeError("gleaning broke")])), \
-         patch("services.extraction_service.settings") as mock_settings:
+
+    async def _complete(*_args, **_kwargs):
+        if not _complete.calls:
+            _complete.calls.append(1)
+            return base_result
+        raise RuntimeError("gleaning broke")
+
+    _complete.calls = []
+    with patch("services.extraction_service.llm_client.complete", new=_complete), \
+         patch("services.extraction_service.settings") as mock_settings, \
+         patch("services.llm_client.asyncio.sleep", new=AsyncMock()), \
+         patch("services.llm_client.record_call_failure"):
         mock_settings.extraction_gleaning_enabled = True
         mock_settings.azure_llm_temperature = 0.0
         result = _run(service.extract_from_chunk("some text", chunk_id="c1"))
